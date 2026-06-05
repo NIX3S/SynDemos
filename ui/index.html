@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Local AI OS</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #0f0f0f;
+    color: white;
+    display: flex;
+    height: 100vh;
+}
+.code-block {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.code-block button {
+    float: right;
+    margin: 5px;
+}
+
+.code-block pre {
+    margin: 0;
+    padding: 12px;
+    overflow-x: auto;
+}
+
+.code-block code {
+    font-family: Consolas, monospace;
+    color: #c9d1d9;
+}
+/* SIDEBAR */
+#sidebar {
+    width: 300px;
+    background: #151515;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    overflow-y: auto;
+}
+
+.sidebar-top {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+button {
+    padding: 8px;
+    border: none;
+    border-radius: 6px;
+    background: #2a2a2a;
+    color: white;
+    cursor: pointer;
+}
+
+button:hover { background: #3a3a3a; }
+
+.group-title {
+    font-size: 11px;
+    color: #777;
+    margin: 10px 0 5px;
+    padding: 10px;
+    min-height: 30px;
+    background: #1d1d1d;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.thread {
+    padding: 10px;
+    border-radius: 8px;
+    background: #222;
+    margin-bottom: 5px;
+    cursor: pointer;
+}
+
+.thread:hover { background: #2f2f2f; }
+
+.thread.active { background: #3b3b3b; }
+
+/* MAIN */
+#main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+#chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.msg {
+    max-width: 70%;
+    padding: 10px;
+    border-radius: 10px;
+    white-space: pre-wrap;
+}
+
+.user {
+    background: #2b5cff;
+    align-self: flex-end;
+}
+
+.assistant {
+    background: #2a2a2a;
+    align-self: flex-start;
+}
+
+#inputBar {
+    display: flex;
+    padding: 10px;
+    gap: 10px;
+    border-top: 1px solid #333;
+}
+
+input, select {
+    padding: 10px;
+    border-radius: 6px;
+    border: none;
+    background: #1e1e1e;
+    color: white;
+}
+
+input { flex: 1; }
+</style>
+</head>
+
+<body>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+    <div class="sidebar-top">
+        <button onclick="newThread()">+ Chat</button>
+        <button onclick="createGroup()">+ Group</button>
+    </div>
+    <div id="sidebarContent"></div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+    <div id="chat"></div>
+
+    <div id="inputBar">
+        <select id="model">
+            <option value="coder">Coder</option>
+            <option value="docs">Docs</option>
+            <option value="reasoning">Reasoning</option>
+        </select>
+
+        <input id="input" placeholder="Message..." />
+        <button onclick="send()">Send</button>
+        <button onclick="stopGeneration()">Stop</button>
+    </div>
+</div>
+
+<script>
+let currentController = null;
+let currentThreadId = null;
+let threads = [];
+let customGroups = [];
+let groupState = {};
+/*let groups = ["Default"];*/
+
+/* LOAD THREADS */
+async function loadThreads() {
+    const res = await fetch("http://localhost:9000/threads");
+    threads = await res.json();
+    for (const t of threads) {
+    const g = t.group || "Default";
+
+    if (!customGroups.includes(g)) {
+            customGroups.push(g);
+        }
+    }
+    renderSidebar();
+
+    if (!currentThreadId && threads.length) {
+        await switchThread(threads[0].thread_id);
+    }
+}
+
+document.getElementById("input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        send();
+    }
+});
+function renderMessage(text) {
+    const div = document.createElement("div");
+
+    if (text.includes("```")) {
+        div.innerHTML = formatCodeBlocks(text);
+    } else {
+        div.innerText = text;
+    }
+
+    return div;
+}
+function formatCodeBlocks(text) {
+    return text.replace(/```([\s\S]*?)```/g, (match, code) => {
+        return `
+            <div class="code-block">
+                <button onclick="navigator.clipboard.writeText(\`${code}\`)">Copy</button>
+                <pre><code>${code}</code></pre>
+            </div>
+        `;
+    });
+}
+
+function stopGeneration() {
+    if (currentController) {
+        currentController.abort();
+        currentController = null;
+    }
+
+    const chat = document.getElementById("chat");
+    const lastMsg = chat.lastElementChild;
+
+    if (lastMsg) {
+        lastMsg.innerText += "\n\n⛔ stopped";
+    }
+}
+/* SIDEBAR */
+function renderSidebar() {
+    const root = document.getElementById("sidebarContent");
+    root.innerHTML = "";
+
+    const safe = Array.isArray(threads) ? threads : [];
+
+    const groupMap = {};
+    for (const t of safe) {
+        const g = t.group || "Default";
+        if (!groupMap[g]) groupMap[g] = [];
+        groupMap[g].push(t);
+    }
+    for (const g of customGroups) {
+            if (!groupMap[g]) {
+                groupMap[g] = [];
+            }
+        }
+    for (const groupName of Object.keys(groupMap)) {
+
+        const title = document.createElement("div");
+        title.className = "group-title";
+        title.innerText = groupName;
+        const currentThread = threads.find(
+            t => t.thread_id === currentThreadId
+        );
+
+        const currentGroup =
+            currentThread?.group || "Default";
+        if (groupState[groupName] === undefined) {
+            groupState[groupName] = false;
+             /*groupState[groupName] = groupName === currentGroup;*/
+        }
+
+        title.innerHTML =
+            (groupState[groupName] ? "▼ " : "▶ ") +
+            groupName;
+
+        title.onclick = () => {
+            groupState[groupName] =
+                !groupState[groupName];
+
+            renderSidebar();
+        };
+        // ✅ drag & drop GROUP
+        title.ondragover = (e) => e.preventDefault();
+
+        title.ondrop = async (e) => {
+            e.preventDefault();
+
+            const thread_id = e.dataTransfer.getData("thread_id");
+
+            await fetch("http://localhost:9000/thread/group", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    thread_id,
+                    title: groupName
+                })
+            });
+
+            loadThreads();
+        };
+
+        root.appendChild(title);
+        if (groupState[groupName]) {
+            for (const t of groupMap[groupName]) {
+
+                const div = document.createElement("div");
+                div.className = "thread" + (t.thread_id === currentThreadId ? " active" : "");
+
+                div.innerHTML = `
+                    <span>${t.title || "New chat"}</span>
+                    <div style="float:right; display:flex; gap:5px;">
+                        <button onclick="renameThread(event, '${t.thread_id}')">✏️</button>
+                        <button onclick="deleteThread(event, '${t.thread_id}')">🗑</button>
+                    </div>
+                `;
+
+                div.onclick = () => switchThread(t.thread_id);
+
+                div.draggable = true;
+                div.ondragstart = (e) => {
+                    e.dataTransfer.setData("thread_id", t.thread_id);
+                };
+
+                root.appendChild(div);
+            }
+        }
+    }
+}
+async function renameThread(e, id) {
+    e.stopPropagation();
+
+    const title = prompt("New title");
+    if (!title) return;
+
+    await fetch("http://localhost:9000/thread/rename", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ thread_id: id, title })
+    });
+
+    loadThreads();
+}
+
+async function deleteThread(e, id) {
+    e.stopPropagation();
+
+    await fetch(`http://localhost:9000/thread/${id}`, {
+        method: "DELETE"
+    });
+
+    if (currentThreadId === id) {
+        currentThreadId = null;
+        document.getElementById("chat").innerHTML = "";
+    }
+
+    loadThreads();
+}
+
+/* SWITCH */
+async function switchThread(id) {
+    if (!id) return;
+
+    currentThreadId = id;
+
+    const res = await fetch(`http://localhost:9000/thread/${id}`);
+    const data = await res.json();
+
+    const group = data.group || "Default";
+    groupState[group] = true;
+
+    renderChat(data.messages || []);
+    renderSidebar();
+}
+
+/* CHAT */
+function renderChat(messages) {
+    const chat = document.getElementById("chat");
+    chat.innerHTML = "";
+
+    messages.forEach((m, i) => {
+
+        const div = document.createElement("div");
+        div.className = "msg " + (m.role === "user" ? "user" : "assistant");
+
+        const content = document.createElement("div");
+        content.innerHTML = formatMessage(m.content);
+
+        if (m.role === "user") {
+            const btn = document.createElement("button");
+            btn.textContent = "✏️";
+            btn.onclick = () => editMessage(i, m.content);
+
+            div.appendChild(btn);
+        }
+        console.log("renderChat", messages);
+        console.log("message", i, m.role);
+        div.appendChild(content);
+
+        chat.appendChild(div);
+    });
+
+    chat.scrollTop = chat.scrollHeight;
+}
+
+function escapeHtml(text) {
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+function formatMessage(text) {
+
+    return text.replace(
+        /```([\s\S]*?)```/g,
+        (_, code) => {
+
+            const safeCode = escapeHtml(code.trim());
+
+            return `
+            <div class="code-block">
+                <button
+                    onclick="copyCode(this)">
+                    📋 Copier
+                </button>
+
+                <pre><code>${safeCode}</code></pre>
+            </div>
+            `;
+        }
+    );
+}
+function copyCode(btn) {
+
+    const code =
+        btn.parentElement.querySelector("code").innerText;
+
+    navigator.clipboard.writeText(code);
+
+    btn.innerText = "✅ Copié";
+
+    setTimeout(() => {
+        btn.innerText = "📋 Copier";
+    }, 1500);
+}
+async function editMessage(index, oldContent) {
+    const newContent = prompt("Edit message", oldContent);
+    if (!newContent) return;
+
+    await fetch("http://localhost:9000/message/edit", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            thread_id: currentThreadId,
+            index,
+            content: newContent
+        })
+    });
+
+    /*await switchThread(currentThreadId);*/
+    await regenerateFrom(index);
+}
+async function regenerateFrom(index) {
+
+    const res = await fetch(
+        "http://localhost:9000/thread/regenerate",
+        {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                thread_id: currentThreadId
+            })
+        }
+    );
+
+    await switchThread(currentThreadId);
+}
+
+/*currentController = new AbortController();*/
+/* SEND STREAM */
+async function send() {
+    console.log("SEND");
+    if (currentController) {
+        currentController.abort();
+    }
+    currentController = new AbortController();
+    const input = document.getElementById("input");
+    const model = document.getElementById("model").value;
+
+    const message = input.value;
+    if (!message || !currentThreadId) return;
+
+    input.value = "";
+
+    addMsg("user", message);
+    console.log("thread", currentThreadId);
+    console.log("message", message);
+    const ai = addMsg("assistant", "", model);
+    let full = "";
+
+    const res = await fetch("http://localhost:9000/chat/stream", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            thread_id: currentThreadId,
+            message,
+            model
+        }),
+        signal: currentController.signal
+    });
+    console.log(res.status);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+
+        const { value, done } = await reader.read();
+        
+        if (currentController?.signal.aborted) {
+            try {
+                await reader.cancel();
+            } catch {}
+            break;
+        }
+
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+        console.log("RAW CHUNK:", chunk);
+        for (const line of lines) {
+
+            if (!line.startsWith("data: ")) continue;
+
+            const raw = line.replace("data: ", "").trim();
+
+            if (raw === "[DONE]") {
+                await loadThreads();
+                currentController = null;
+                return;
+            }
+
+            try {
+                const json = JSON.parse(raw);
+                const contentDiv = ai.querySelector("div:last-child");
+                full += json.token || "";
+                /*contentDiv.textContent = full;*/
+                /*ai.innerText = full;*/
+
+                contentDiv.innerHTML = formatMessage(full);
+
+
+                console.log("RECV", json.token, Date.now());    
+                if (json.model) {
+                    ai.dataset.model = json.model;
+                }
+
+                autoScroll();
+
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    }
+}
+
+/* UI HELPERS */
+function addMsg(role, text, model = null) {
+    const div = document.createElement("div");
+    div.className = "msg " + (role === "user" ? "user" : "assistant");
+
+    div.innerHTML = `
+        ${model ? `<div style="font-size:10px; opacity:0.5">${model}</div>` : ""}
+        <div>${formatMessage(text)}</div>
+    `;
+    if (role === "user") {
+
+        const index =
+            document.querySelectorAll("#chat .msg").length;
+
+        const btn = document.createElement("button");
+
+        btn.textContent = "✏️";
+
+        btn.onclick = () =>
+            editMessage(index, text);
+
+        div.appendChild(btn);
+    }
+    document.getElementById("chat").appendChild(div);
+    autoScroll();
+    return div;
+}
+
+function autoScroll() {
+    const chat = document.getElementById("chat");
+    chat.scrollTop = chat.scrollHeight;
+}
+
+/* NEW THREAD */
+async function newThread() {
+    const res = await fetch("http://localhost:9000/thread/new", { method: "POST" });
+    const data = await res.json();
+
+    await loadThreads();
+    await switchThread(data.thread_id);
+}
+
+/* GROUP */
+function createGroup() {
+
+    const name = prompt("Group name");
+
+    if (!name) return;
+
+    if (customGroups.includes(name)) {
+        return;
+    }
+
+    customGroups.push(name);
+
+    renderSidebar();
+}
+
+/* INIT */
+window.onload = loadThreads;
+
+</script>
+
+</body>
+</html>

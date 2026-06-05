@@ -1,0 +1,81 @@
+cd /mnt/d/dev/ai_os
+source .venv/bin/activate
+
+Node :
+npm install -g @modelcontextprotocol/server-filesystem
+npx -y @modelcontextprotocol/server-filesystem@latest
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+nvm install 18
+nvm use 18
+
+
+pkill ollama
+ollama serve
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGdJ/omlfFATqig8A6jJxpi7oHiGJMGsc0Veb9ptd3EZ
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install vllm
+
+vllm serve /mnt/d/dev/ai_os/models/Qwen_Code --port 8001 --gpu-memory-utilization 0.75
+
+vllm serve /mnt/d/dev/ai_os/models/Qwen_Code \
+  --port 8001 \
+  --gpu-memory-utilization 0.80 \
+  --max-model-len 4096
+
+export VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0
+
+vllm serve /mnt/d/dev/ai_os/models/Qwen_Code \
+  --port 8001 \
+  --gpu-memory-utilization 0.95 \
+  --max-model-len 2048
+
+
+
+vllm serve ~/models/Qwen_Code \
+  --port 8001 \
+  --gpu-memory-utilization 0.80 \
+  --max-model-len 2048
+
+
+
+vllm serve ~/models/Qwen_Code \
+  --port 8001 \
+  --gpu-memory-utilization 0.80 \
+  --max-model-len 512 \
+  --enforce-eager
+
+lsof -i:8080
+kill $(lsof -t -i:9000)
+
+-----------------
+test ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+
+créer ModelFile:
+FROM /home/user/models/mistral
+
+PARAMETER temperature 0.7
+
+SYSTEM """
+Tu réponds en français.
+"""
+
+
+ollama create mistral-local -f Modelfile
+
+test:
+ollama run mistral-local
+
+cas:
+ollama create Coder -f Modelfile
+ollama create Docs -f Modelfile
+ollama create Reasoning -f Modelfile
+----------
+Model local :
+mkdir -p ~/models
+
+cp -r /mnt/d/dev/ai_os/models/Qwen_Code ~/models/

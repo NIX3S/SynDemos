@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Local AI</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #0f0f0f;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #chat {
+            width: 700px;
+            height: 500px;
+            border: 1px solid #333;
+            overflow-y: auto;
+            padding: 10px;
+            margin-top: 20px;
+        }
+
+        .msg { margin: 10px 0; }
+
+        .user { color: #4ea1ff; }
+        .assistant { color: #7CFC00; }
+
+        input, select, button {
+            margin-top: 10px;
+            padding: 10px;
+        }
+
+        input { width: 500px; }
+    </style>
+</head>
+
+<body>
+
+<h2>🧠 Local AI OS</h2>
+
+<select id="model">
+    <option value="coder">Coder</option>
+    <option value="docs">Docs</option>
+    <option value="reasoning">Reasoning</option>
+</select>
+
+<div style="margin-top:20px;">
+    <button onclick="newThread()">+ New thread</button>
+</div>
+<div style="margin-top:10px;">
+    <input id="threadTitle" style="width:300px;" />
+    <button onclick="renameThread()">Rename</button>
+</div>
+
+<select id="threads" onchange="switchThread(this.value)"></select>
+
+<div id="chat"></div>
+
+<input id="input" placeholder="Ask something..." />
+<button onclick="send()">Send</button>
+
+<script>
+let currentThreadId = null;
+
+async function loadThreads() {
+    const res = await fetch("http://localhost:9000/threads");
+    const threads = await res.json();
+
+    const select = document.getElementById("threads");
+    select.innerHTML = "";
+
+    // aucun thread → on en crée un automatiquement
+    if (!threads || threads.length === 0) {
+        await newThread();
+        return;
+    }
+
+    for (const t of threads) {
+        const id = t.thread_id;
+
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = t.title || "Untitled";
+        select.appendChild(opt);
+    }
+
+    const firstId = threads[0].thread_id;
+    select.value = firstId;
+    currentThreadId = firstId;
+
+    await switchThread(firstId);
+}
+
+async function switchThread(id) {
+    if (!id) return;
+
+    currentThreadId = id;
+
+    const select = document.getElementById("threads");
+    select.value = id;
+
+    const res = await fetch(`http://localhost:9000/thread/${id}`);
+    const data = await res.json();
+
+    // 👇 update input title
+    document.getElementById("threadTitle").value = data.title || "";
+
+    renderChat(data.messages || []);
+}
+
+async function renameThread() {
+    const title = document.getElementById("threadTitle").value;
+
+    if (!currentThreadId) return;
+
+    await fetch("http://localhost:9000/thread/rename", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            thread_id: currentThreadId,
+            title
+        })
+    });
+
+    await loadThreads();
+}
+
+function renderChat(messages) {
+    const chat = document.getElementById("chat");
+    chat.innerHTML = "";
+
+    if (!messages || !Array.isArray(messages)) return;
+
+    for (const m of messages) {
+        addMsg(m.role === "user" ? "user" : "ai", m.content);
+    }
+}
+
+async function newThread() {
+    const res = await fetch("http://localhost:9000/thread/new", {
+        method: "POST"
+    });
+
+    const data = await res.json();
+
+    await loadThreads();
+
+    currentThreadId = data.thread_id;
+    await switchThread(data.thread_id);
+}
+
+async function send() {
+    const input = document.getElementById("input");
+    const model = document.getElementById("model").value;
+
+    const message = input.value;
+    if (!message) return;
+
+    if (!currentThreadId) {
+        alert("No thread selected yet");
+        return;
+    }
+
+    addMsg("user", message);
+    input.value = "";
+
+    const aiBubble = addMsg("assistant", "...");
+
+    try {
+        const res = await fetch("http://localhost:9000/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                thread_id: currentThreadId,
+                message,
+                model
+            })
+        });
+
+        const data = await res.json();
+        aiBubble.innerText = `[${model}] ${data.response}`;
+
+    } catch (err) {
+        aiBubble.innerText = "API error";
+        console.error(err);
+    }
+}
+
+function addMsg(type, text) {
+    const div = document.createElement("div");
+    div.className = "msg " + type;
+    div.innerText = text;
+
+    document.getElementById("chat").appendChild(div);
+    return div;
+}
+
+window.onload = async () => {
+    await loadThreads();
+};
+</script>
+
+</body>
+</html>
