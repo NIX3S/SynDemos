@@ -3,3 +3,6 @@ old
 testagent
 .venv
 data
+runs
+Agent_v2
+__pycache__

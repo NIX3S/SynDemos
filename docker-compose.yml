@@ -1,0 +1,35 @@
+services:
+
+  syndemos:
+    build: .
+
+    container_name: SynDemos
+
+    ports:
+      - "11434:11434"
+      - "8000:8000"
+      - "8080:8080"
+      - "9000:9000"
+
+    volumes:
+
+      # modèles Ollama persistants
+      - ollama_data:/root/.ollama
+
+      # projets
+      - "/mnt/d/dev/ai_os/SynDemos:/workspace/SynDemos"
+      - "/mnt/d/dev/ai_os/workforce:/workspace/workforce"
+
+      # GGUF + Modelfiles
+      - "/mnt/d/dev/ai_os/models:/models"
+
+    environment:
+      - OLLAMA_HOST=http://localhost:11434
+
+    stdin_open: true
+    tty: true
+
+    restart: unless-stopped
+
+volumes:
+  ollama_data:

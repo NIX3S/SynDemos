@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay — Local AI</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* =========================================================
+   TOKENS
+   ========================================================= */
+:root {
+    --bg: #10141a;
+    --surface: #161b22;
+    --surface-2: #1d232b;
+    --border: #262e37;
+    --text: #e7ecef;
+    --text-dim: #828d96;
+
+    --accent: #45b58b;        /* chat — "connecté" */
+    --accent-soft: #45b58b2a;
+    --agent: #e0a23b;         /* agent — "en travail" */
+    --agent-soft: #e0a23b2a;
+    --danger: #e0615a;
+    --danger-soft: #e0615a2a;
+
+    --font-ui: 'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+
+    --radius: 8px;
+    color-scheme: dark;
+}
+
+[data-theme="light"] {
+    --bg: #eef1f0;
+    --surface: #ffffff;
+    --surface-2: #f4f6f5;
+    --border: #dce3e1;
+    --text: #1a2024;
+    --text-dim: #687077;
+
+    --accent: #2e8e68;
+    --accent-soft: #2e8e6822;
+    --agent: #b97a1e;
+    --agent-soft: #b97a1e22;
+    --danger: #c94b45;
+    --danger-soft: #c94b4522;
+
+    color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+}
+
+button {
+    font-family: var(--font-ui);
+    border: none;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+input, select {
+    font-family: var(--font-ui);
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+/* =========================================================
+   SHELL
+   ========================================================= */
+#app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#topbar {
+    height: 56px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 13px;
+}
+
+.brand-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0 var(--accent-soft);
+    animation: pulse 2.6s infinite;
+}
+
+@keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 var(--accent-soft); }
+    70%  { box-shadow: 0 0 0 7px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#menuToggle {
+    display: none;
+    width: 32px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+}
+#menuToggle:hover { background: var(--surface-2); }
+
+/* theme switch */
+#themeToggle {
+    width: 40px;
+    height: 24px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    position: relative;
+    padding: 0;
+}
+#themeToggle .knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    transition: transform 0.18s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+}
+[data-theme="light"] #themeToggle .knob { transform: translateX(16px); background: var(--agent); }
+
+#body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+#sidebar {
+    width: 272px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sidebar-actions {
+    display: flex;
+    gap: 8px;
+    padding: 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+.new-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    font-weight: 500;
+    transition: border-color 0.15s, background 0.15s;
+}
+.new-btn .dot { width: 6px; height: 6px; border-radius: 50%; }
+.new-btn.chat .dot { background: var(--accent); }
+.new-btn.agent .dot { background: var(--agent); }
+.new-btn:hover { background: var(--surface-2); }
+.new-btn.chat:hover { border-color: var(--accent); }
+.new-btn.agent:hover { border-color: var(--agent); }
+
+#sidebarContent {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.group-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 8px 8px;
+    margin-top: 6px;
+    cursor: pointer;
+    user-select: none;
+    border-radius: var(--radius);
+}
+.group-title:hover { background: var(--surface-2); color: var(--text); }
+.group-title .caret { font-size: 9px; width: 10px; display: inline-block; }
+
+.thread-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 12px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    margin-bottom: 4px;
+    position: relative;
+}
+.thread-item:hover { background: var(--surface-2); }
+.thread-item.active { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+.thread-item.active.is-agent { box-shadow: inset 2px 0 0 var(--agent); }
+
+.thread-item.drop-before::before,
+.thread-item.drop-after::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--accent);
+}
+.thread-item.drop-before::before { top: -3px; }
+.thread-item.drop-after::after { bottom: -3px; }
+
+.group-body {
+    padding: 4px;
+    min-height: 16px;
+    border-radius: var(--radius);
+    transition: background 0.12s;
+}
+.group-body.drag-over { background: var(--accent-soft); }
+
+.thread-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.thread-dot.chat { background: var(--accent); }
+.thread-dot.agent { background: var(--agent); }
+
+.thread-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.thread-title-input {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    padding: 3px 6px;
+    border-color: var(--accent);
+}
+
+.thread-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.12s;
+    flex-shrink: 0;
+}
+.thread-item:hover .thread-actions { opacity: 1; }
+.icon-btn {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    color: var(--text-dim);
+    font-size: 13px;
+}
+.icon-btn:hover { background: var(--border); color: var(--text); }
+
+#newGroupBtn {
+    flex-shrink: 0;
+    text-align: left;
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+}
+#newGroupBtn:hover { color: var(--text); background: var(--surface-2); }
+
+.new-group-input {
+    flex-shrink: 0;
+    width: 100%;
+    font-size: 12px;
+    padding: 10px 16px;
+    border: none;
+    border-top: 1px solid var(--accent);
+    border-radius: 0;
+}
+
+/* =========================================================
+   MAIN
+   ========================================================= */
+#main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+#threadHeader {
+    height: 48px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+}
+
+#threadHeaderTitle {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+#model {
+    font-size: 12px;
+    padding: 6px 10px;
+}
+
+#chat {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.empty-state {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--text-dim);
+    font-size: 13px;
+    text-align: center;
+    padding: 40px;
+}
+
+/* --- rows : unité visuelle commune chat / agent --- */
+.row {
+    display: flex;
+    gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    border-left: 3px solid transparent;
+    position: relative;
+}
+.row.row-user { border-left-color: var(--accent); }
+.row.row-model { border-left-color: var(--border); }
+.row.row-agent { border-left-color: var(--agent); }
+
+.row-marker {
+    width: 60px;
+    flex-shrink: 0;
+    text-align: right;
+    padding-top: 2px;
+}
+.marker-label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+.row-user .marker-label { color: var(--accent); }
+.row-agent .marker-label { color: var(--agent); }
+
+.row-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.row-tag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+}
+
+.row-text {
+    white-space: pre-wrap;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.row-actions {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+}
+.row-action {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    color: var(--text-dim);
+    padding: 2px 0;
+    border-bottom: 1px solid transparent;
+}
+.row-action:hover { color: var(--text); border-bottom-color: var(--border); }
+.row-action.primary { color: var(--accent); }
+.row-action.primary:hover { border-bottom-color: var(--accent); }
+
+.row-edit-input {
+    display: block;
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text);
+    resize: none;
+    overflow: hidden;
+}
+.row-edit-input:focus { outline: none; }
+
+/* code blocks */
+.code-block {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin: 8px 0;
+    overflow: hidden;
+}
+.code-block .code-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--border);
+}
+.code-block button {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 3px 8px;
+    border-radius: 5px;
+}
+.code-block button:hover { background: var(--border); color: var(--text); }
+.code-block pre { margin: 0; padding: 12px; overflow-x: auto; }
+.code-block code { font-family: var(--font-mono); color: var(--text); font-size: 13px; }
+
+/* --- agent : work panel --- */
+.work-toggle {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--agent);
+    margin-bottom: 8px;
+    padding: 0;
+    user-select: none;
+}
+.work-toggle:hover { text-decoration: underline; }
+
+.work-log {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--agent);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+.work-log .step { margin-bottom: 6px; white-space: pre-wrap; }
+.work-log .step.error { color: var(--danger); }
+
+/* =========================================================
+   INPUT BAR
+   ========================================================= */
+#inputBar {
+    flex-shrink: 0;
+    padding: 14px 20px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+}
+
+#statusLine {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+}
+#statusLine .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.2s infinite;
+}
+#statusLine.agent .dot { background: var(--agent); }
+
+#inputRow {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 6px 6px 6px 14px;
+}
+#inputRow:focus-within { border-color: var(--accent); }
+
+#input {
+    flex: 1;
+    border: none;
+    background: none;
+    padding: 8px 0;
+    font-size: 14px;
+}
+#input:focus { outline: none; }
+
+#sendBtn {
+    background: var(--accent);
+    color: #0c1410;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 9px 16px;
+    border-radius: 9px;
+    transition: opacity 0.12s;
+}
+#sendBtn:hover { opacity: 0.85; }
+
+#stopBtn {
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 9px 14px;
+    border-radius: 9px;
+}
+#stopBtn:hover { border-color: var(--danger); color: var(--danger); }
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+@media (max-width: 760px) {
+    #menuToggle { display: flex; }
+
+    #sidebar {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        bottom: 0;
+        z-index: 20;
+        transform: translateX(-100%);
+        transition: transform 0.18s ease;
+        box-shadow: 2px 0 16px rgba(0,0,0,0.3);
+    }
+    body.sidebar-open #sidebar { transform: translateX(0); }
+
+    .row { gap: 10px; padding: 14px; }
+    .row-marker { width: 44px; }
+}
+</style>
+</head>
+
+<body>
+
+<div id="app">
+
+    <div id="topbar">
+        <div class="topbar-left" style="display:flex; align-items:center; gap:6px;">
+            <button id="menuToggle" aria-label="Ouvrir le menu" onclick="toggleSidebar()">☰</button>
+            <div class="brand"><span class="brand-dot"></span>Relay</div>
+        </div>
+        <div class="topbar-right">
+            <button id="themeToggle" role="switch" aria-checked="false" aria-label="Basculer le thème" onclick="toggleTheme()">
+                <span class="knob"></span>
+            </button>
+        </div>
+    </div>
+
+    <div id="body">
+
+        <div id="sidebar">
+            <div class="sidebar-actions">
+                <button class="new-btn chat" onclick="newThread('chat')"><span class="dot"></span>Chat</button>
+                <button class="new-btn agent" onclick="newThread('agent')"><span class="dot"></span>Agent</button>
+            </div>
+            <div id="sidebarContent"></div>
+            <button id="newGroupBtn" onclick="createGroup()">+ Nouveau groupe</button>
+        </div>
+
+        <div id="main">
+            <div id="threadHeader">
+                <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                    <div id="threadHeaderTitle">—</div>
+                    <span id="threadTypeBadge" class="row-tag" style="display:none;">Agent</span>
+                </div>
+                <select id="model">
+                    <option value="coder">Coder</option>
+                    <option value="docs">Docs</option>
+                    <option value="reasoning">Reasoning</option>
+                </select>
+            </div>
+
+            <div id="chat"></div>
+
+            <div id="inputBar">
+                <div id="statusLine"><span class="dot"></span><span id="statusText">Génération…</span></div>
+                <div id="inputRow">
+                    <input id="input" placeholder="Écrire un message…" autocomplete="off" />
+                    <button id="stopBtn" onclick="stopGeneration()">Stop</button>
+                    <button id="sendBtn" onclick="send()">Envoyer</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+const API = "http://localhost:9000";
+
+let currentController = null;
+let currentThreadId = null;
+let currentThreadType = "chat"; // "chat" ou "agent"
+let currentAgentRunId = null;
+let threads = [];
+let customGroups = [];
+let groupState = {};
+
+/* =========================================================
+   THEME
+   ========================================================= */
+function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.getElementById("themeToggle").setAttribute("aria-checked", theme === "light");
+    localStorage.setItem("relay-theme", theme);
+}
+
+function toggleTheme() {
+    const current = document.documentElement.getAttribute("data-theme") || "dark";
+    applyTheme(current === "dark" ? "light" : "dark");
+}
+
+(function initTheme() {
+    const saved = localStorage.getItem("relay-theme");
+    const prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+    applyTheme(saved || (prefersLight ? "light" : "dark"));
+})();
+
+function toggleSidebar() {
+    document.body.classList.toggle("sidebar-open");
+}
+
+/* =========================================================
+   LOAD THREADS
+   ========================================================= */
+async function loadThreads() {
+    const res = await fetch(`${API}/threads`);
+    threads = await res.json();
+    for (const t of threads) {
+        const g = t.group || "Default";
+        if (!customGroups.includes(g)) customGroups.push(g);
+    }
+    renderSidebar();
+
+    if (!currentThreadId && threads.length) {
+        await switchThread(threads[0].thread_id);
+    }
+}
+
+document.getElementById("input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") send();
+});
+
+/* =========================================================
+   FORMATTING
+   ========================================================= */
+function escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function formatMessage(text) {
+    return text.replace(/```([\s\S]*?)```/g, (_, code) => {
+        const safeCode = escapeHtml(code.trim());
+        return `
+        <div class="code-block">
+            <div class="code-bar"><button onclick="copyCode(this)">Copier</button></div>
+            <pre><code>${safeCode}</code></pre>
+        </div>`;
+    });
+}
+
+function copyCode(btn) {
+    const code = btn.closest(".code-block").querySelector("code").innerText;
+    navigator.clipboard.writeText(code);
+    btn.innerText = "Copié";
+    setTimeout(() => { btn.innerText = "Copier"; }, 1500);
+}
+
+/* =========================================================
+   STATUS LINE
+   ========================================================= */
+function setStatus(active, kind) {
+    const el = document.getElementById("statusLine");
+    el.className = kind === "agent" ? "agent" : "";
+    el.style.display = active ? "flex" : "none";
+}
+
+/* =========================================================
+   STOP
+   ========================================================= */
+function stopGeneration() {
+    if (currentController) {
+        currentController.abort();
+        currentController = null;
+    }
+
+    if (currentThreadType === "agent" && currentAgentRunId) {
+        fetch(`${API}/agent/stop/${currentAgentRunId}`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ force: false })
+        }).catch(() => {});
+        currentAgentRunId = null;
+    }
+
+    setStatus(false);
+
+    const chat = document.getElementById("chat");
+    const last = chat.lastElementChild;
+    if (last) {
+        const target = last.querySelector(".row-text") || last;
+        target.innerHTML += "<br><br>— interrompu —";
+    }
+}
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+function sortedGroupThreads(list) {
+    // Par défaut (aucun ordre manuel fixé) : le plus récemment modifié
+    // en premier (déjà l'ordre renvoyé par le backend). Dès qu'un
+    // glisser-déposer a fixé un ordre explicite sur le groupe, on l'utilise.
+    const hasOrder = list.some(t => typeof t.order === "number");
+    if (!hasOrder) return list;
+
+    return [...list].sort((a, b) => {
+        const oa = typeof a.order === "number" ? a.order : Infinity;
+        const ob = typeof b.order === "number" ? b.order : Infinity;
+        return oa - ob;
+    });
+}
+
+async function dropThreadInGroup(draggedId, groupName, anchorId, before) {
+    const currentSorted = sortedGroupThreads(
+        threads.filter(t => (t.group || "Default") === groupName)
+    );
+    const ids = currentSorted.map(t => t.thread_id).filter(id => id !== draggedId);
+
+    let targetIndex = ids.length; // par défaut : à la fin du groupe
+    if (anchorId) {
+        const anchorPos = ids.indexOf(anchorId);
+        if (anchorPos !== -1) targetIndex = before ? anchorPos : anchorPos + 1;
+    }
+
+    ids.splice(targetIndex, 0, draggedId);
+
+    await fetch(`${API}/thread/reorder`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ group: groupName, thread_ids: ids })
+    });
+
+    await loadThreads();
+}
+
+function renderSidebar() {
+    const root = document.getElementById("sidebarContent");
+    root.innerHTML = "";
+
+    const safe = Array.isArray(threads) ? threads : [];
+    const groupMap = {};
+    for (const t of safe) {
+        const g = t.group || "Default";
+        if (!groupMap[g]) groupMap[g] = [];
+        groupMap[g].push(t);
+    }
+    for (const g of customGroups) {
+        if (!groupMap[g]) groupMap[g] = [];
+    }
+
+    if (Object.keys(groupMap).length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "padding:16px 10px; color:var(--text-dim); font-size:12.5px;";
+        empty.innerText = "Aucune conversation pour le moment.";
+        root.appendChild(empty);
+        return;
+    }
+
+    for (const groupName of Object.keys(groupMap)) {
+
+        const title = document.createElement("div");
+        title.className = "group-title";
+
+        if (groupState[groupName] === undefined) groupState[groupName] = true;
+
+        title.innerHTML = `<span class="caret">${groupState[groupName] ? "▾" : "▸"}</span>${groupName}`;
+
+        title.onclick = () => {
+            groupState[groupName] = !groupState[groupName];
+            renderSidebar();
+        };
+
+        title.ondragover = (e) => e.preventDefault();
+        title.ondrop = async (e) => {
+            e.preventDefault();
+            const draggedId = e.dataTransfer.getData("thread_id");
+            if (!draggedId) return;
+            await dropThreadInGroup(draggedId, groupName, null, false);
+        };
+
+        root.appendChild(title);
+
+        // Zone de dépôt agrandie : tout le corps du groupe (pas juste le
+        // titre), avec retour visuel pendant le survol.
+        const body = document.createElement("div");
+        body.className = "group-body";
+
+        body.ondragover = (e) => {
+            e.preventDefault();
+            body.classList.add("drag-over");
+        };
+        body.ondragleave = () => body.classList.remove("drag-over");
+        body.ondrop = async (e) => {
+            e.preventDefault();
+            body.classList.remove("drag-over");
+            const draggedId = e.dataTransfer.getData("thread_id");
+            if (!draggedId) return;
+            await dropThreadInGroup(draggedId, groupName, null, false);
+        };
+
+        if (groupState[groupName]) {
+            const sorted = sortedGroupThreads(groupMap[groupName]);
+
+            sorted.forEach((t) => {
+                const isAgent = t.type === "agent";
+
+                const div = document.createElement("div");
+                div.className = "thread-item" + (t.thread_id === currentThreadId ? " active" : "") + (isAgent ? " is-agent" : "");
+
+                div.innerHTML = `
+                    <span class="thread-dot ${isAgent ? "agent" : "chat"}"></span>
+                    <span class="thread-title">${t.title || "Nouvelle conversation"}</span>
+                    <div class="thread-actions">
+                        <button class="icon-btn" title="Renommer" onclick="renameThread(event, '${t.thread_id}')">✎</button>
+                        <button class="icon-btn" title="Supprimer" onclick="deleteThread(event, '${t.thread_id}')">×</button>
+                    </div>
+                `;
+
+                div.onclick = () => switchThread(t.thread_id);
+
+                div.draggable = true;
+                div.ondragstart = (e) => e.dataTransfer.setData("thread_id", t.thread_id);
+
+                // Survol précis : moitié haute = "insérer avant",
+                // moitié basse = "insérer après" -> permet de choisir
+                // exactement la position (1er, 2e, ...) dans le groupe.
+                div.ondragover = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const rect = div.getBoundingClientRect();
+                    const before = (e.clientY - rect.top) < rect.height / 2;
+                    div.classList.toggle("drop-before", before);
+                    div.classList.toggle("drop-after", !before);
+                };
+                div.ondragleave = () => {
+                    div.classList.remove("drop-before", "drop-after");
+                };
+                div.ondrop = async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const before = div.classList.contains("drop-before");
+                    div.classList.remove("drop-before", "drop-after");
+                    const draggedId = e.dataTransfer.getData("thread_id");
+                    if (!draggedId || draggedId === t.thread_id) return;
+                    await dropThreadInGroup(draggedId, groupName, t.thread_id, before);
+                };
+
+                body.appendChild(div);
+            });
+        }
+
+        root.appendChild(body);
+    }
+}
+
+async function renameThread(e, id) {
+    e.stopPropagation();
+
+    const item = e.currentTarget.closest(".thread-item");
+    const titleSpan = item.querySelector(".thread-title");
+    const oldTitle = titleSpan.innerText;
+
+    const input = document.createElement("input");
+    input.className = "thread-title-input";
+    input.value = oldTitle;
+    titleSpan.replaceWith(input);
+    input.focus();
+    input.select();
+    input.onclick = (ev) => ev.stopPropagation();
+
+    let done = false;
+    const finish = async (commit) => {
+        if (done) return;
+        done = true;
+
+        const newTitle = input.value.trim();
+        input.replaceWith(titleSpan);
+
+        if (commit && newTitle && newTitle !== oldTitle) {
+            titleSpan.innerText = newTitle;
+            await fetch(`${API}/thread/rename`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ thread_id: id, title: newTitle })
+            });
+            if (id === currentThreadId) {
+                document.getElementById("threadHeaderTitle").innerText = newTitle;
+            }
+            loadThreads();
+        }
+    };
+
+    input.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { ev.preventDefault(); finish(true); }
+        else if (ev.key === "Escape") finish(false);
+    });
+    input.addEventListener("blur", () => finish(true));
+}
+
+async function deleteThread(e, id) {
+    e.stopPropagation();
+    await fetch(`${API}/thread/${id}`, { method: "DELETE" });
+
+    if (currentThreadId === id) {
+        currentThreadId = null;
+        document.getElementById("chat").innerHTML = "";
+        document.getElementById("threadHeaderTitle").innerText = "—";
+    }
+    loadThreads();
+}
+
+/* =========================================================
+   SWITCH THREAD
+   ========================================================= */
+async function switchThread(id) {
+    if (!id) return;
+    currentThreadId = id;
+    document.body.classList.remove("sidebar-open");
+
+    const res = await fetch(`${API}/thread/${id}`);
+    const data = await res.json();
+
+    currentThreadType = data.type || "chat";
+    document.getElementById("model").style.display = currentThreadType === "agent" ? "none" : "";
+    document.getElementById("threadHeaderTitle").innerText = data.title || "Nouvelle conversation";
+    document.getElementById("threadTypeBadge").style.display = currentThreadType === "agent" ? "inline-block" : "none";
+
+    const group = data.group || "Default";
+    groupState[group] = true;
+
+    renderChat(data.messages || []);
+    renderSidebar();
+}
+
+/* =========================================================
+   RENDER MESSAGES
+   ========================================================= */
+function renderChat(messages) {
+    const chat = document.getElementById("chat");
+    chat.innerHTML = "";
+
+    if (!messages.length) {
+        chat.innerHTML = `<div class="empty-state">
+            <div>Aucun message pour l'instant.</div>
+            <div>Écris quelque chose pour démarrer.</div>
+        </div>`;
+        return;
+    }
+
+    messages.forEach((m, i) => {
+        if (m.role === "assistant" && Array.isArray(m.agent_log)) {
+            renderAgentMessage(m);
+            return;
+        }
+        addRow(m.role, m.content, m.model, i);
+    });
+
+    chat.scrollTop = chat.scrollHeight;
+}
+
+function addRow(role, text, model, index) {
+    const chat = document.getElementById("chat");
+    if (chat.querySelector(".empty-state")) chat.innerHTML = "";
+
+    const row = document.createElement("div");
+    row.className = "row " + (role === "user" ? "row-user" : "row-model");
+
+    const label = role === "user" ? "Vous" : (model || "Modèle");
+
+    row.innerHTML = `
+        <div class="row-marker"><span class="marker-label">${label}</span></div>
+        <div class="row-content">
+            <div class="row-text">${formatMessage(text)}</div>
+        </div>
+    `;
+
+    if (index !== undefined) {
+        const content = row.querySelector(".row-content");
+        const actions = document.createElement("div");
+        actions.className = "row-actions";
+
+        if (role === "user") {
+            const editBtn = document.createElement("button");
+            editBtn.className = "row-action";
+            editBtn.innerText = "Modifier";
+            editBtn.onclick = () => enterEditMode(row, index, text);
+            actions.appendChild(editBtn);
+        } else {
+            const regenBtn = document.createElement("button");
+            regenBtn.className = "row-action";
+            regenBtn.innerText = "Régénérer";
+            regenBtn.onclick = () => regenerateMessage(index);
+            actions.appendChild(regenBtn);
+        }
+
+        content.appendChild(actions);
+    }
+
+    chat.appendChild(row);
+    autoScroll();
+    return row;
+}
+
+function addAgentRow() {
+    const chat = document.getElementById("chat");
+    if (chat.querySelector(".empty-state")) chat.innerHTML = "";
+
+    const row = document.createElement("div");
+    row.className = "row row-agent";
+
+    row.innerHTML = `
+        <div class="row-marker"><span class="marker-label">Agent</span></div>
+        <div class="row-content">
+            <button class="work-toggle"></button>
+            <div class="work-log"></div>
+            <div class="row-text"></div>
+        </div>
+    `;
+
+    chat.appendChild(row);
+    autoScroll();
+
+    return {
+        toggle: row.querySelector(".work-toggle"),
+        workLog: row.querySelector(".work-log"),
+        answerDiv: row.querySelector(".row-text"),
+    };
+}
+
+function renderAgentMessage(m) {
+    const { toggle, workLog, answerDiv } = addAgentRow();
+    (m.agent_log || []).forEach(evt => appendWorkLine(workLog, evt.line, evt.type === "error"));
+    answerDiv.innerHTML = formatMessage(m.content || "");
+    collapseAgentWork(toggle, workLog, (m.agent_log || []).length);
+}
+
+function appendWorkLine(workLog, text, isError) {
+    const p = document.createElement("div");
+    p.className = "step" + (isError ? " error" : "");
+    p.innerText = text;
+    workLog.appendChild(p);
+    workLog.scrollTop = workLog.scrollHeight;
+}
+
+function collapseAgentWork(toggle, workLog, count) {
+    if (count === 0) {
+        toggle.style.display = "none";
+        workLog.style.display = "none";
+        return;
+    }
+
+    let open = false;
+    workLog.style.display = "none";
+    toggle.style.display = "flex";
+    toggle.innerText = `▸ Travail de l'agent (${count} étapes)`;
+
+    toggle.onclick = () => {
+        open = !open;
+        workLog.style.display = open ? "block" : "none";
+        toggle.innerText = (open ? "▾" : "▸") + ` Travail de l'agent (${count} étapes)`;
+    };
+}
+
+/* =========================================================
+   EDIT / REGENERATE
+   ========================================================= */
+function autoResizeTextarea(el) {
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+}
+
+function enterEditMode(row, index, rawText) {
+    const content = row.querySelector(".row-content");
+    const textDiv = content.querySelector(".row-text");
+    const actions = content.querySelector(".row-actions");
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "row-edit-input";
+    textarea.value = rawText;
+    textarea.rows = 1;
+
+    const saveBar = document.createElement("div");
+    saveBar.className = "row-actions";
+    saveBar.innerHTML = `
+        <button class="row-action primary">Enregistrer</button>
+        <button class="row-action">Annuler</button>
+    `;
+
+    textDiv.style.display = "none";
+    actions.style.display = "none";
+    content.insertBefore(textarea, actions);
+    content.insertBefore(saveBar, actions.nextSibling);
+
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    autoResizeTextarea(textarea);
+    textarea.addEventListener("input", () => autoResizeTextarea(textarea));
+
+    const [saveBtn, cancelBtn] = saveBar.querySelectorAll(".row-action");
+
+    const cleanup = () => {
+        textarea.remove();
+        saveBar.remove();
+        textDiv.style.display = "";
+        actions.style.display = "";
+    };
+
+    saveBtn.onclick = async () => {
+        const newContent = textarea.value.trim();
+        if (!newContent) return;
+
+        await fetch(`${API}/message/edit`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ thread_id: currentThreadId, index, content: newContent })
+        });
+
+        await regenerateFrom(index);
+    };
+
+    cancelBtn.onclick = cleanup;
+
+    textarea.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            saveBtn.click();
+        } else if (e.key === "Escape") {
+            cleanup();
+        }
+    });
+}
+
+async function regenerateFrom(index) {
+    setStatus(true, currentThreadType);
+    try {
+        await fetch(`${API}/thread/regenerate`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ thread_id: currentThreadId })
+        });
+    } finally {
+        setStatus(false);
+    }
+    await switchThread(currentThreadId);
+}
+
+async function regenerateMessage(index) {
+    setStatus(true, currentThreadType);
+    try {
+        await fetch(`${API}/message/regenerate`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ thread_id: currentThreadId, index })
+        });
+    } finally {
+        setStatus(false);
+    }
+    await switchThread(currentThreadId);
+}
+
+/* =========================================================
+   SEND — dispatch
+   ========================================================= */
+async function send() {
+    if (currentThreadType === "agent") {
+        await sendAgent();
+    } else {
+        await sendChat();
+    }
+}
+
+/* --- chat classique --- */
+async function sendChat() {
+    if (currentController) currentController.abort();
+    currentController = new AbortController();
+
+    const input = document.getElementById("input");
+    const model = document.getElementById("model").value;
+    const message = input.value;
+    if (!message || !currentThreadId) return;
+    input.value = "";
+
+    addRow("user", message);
+    const row = addRow("assistant", "", model);
+    const textDiv = row.querySelector(".row-text");
+    let full = "";
+
+    setStatus(true, "chat");
+
+    const res = await fetch(`${API}/chat/stream`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ thread_id: currentThreadId, message, model }),
+        signal: currentController.signal
+    });
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+        const { value, done } = await reader.read();
+
+        if (currentController?.signal.aborted) {
+            try { await reader.cancel(); } catch {}
+            break;
+        }
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            const raw = line.replace("data: ", "").trim();
+
+            if (raw === "[DONE]") {
+                setStatus(false);
+                await loadThreads();
+                await switchThread(currentThreadId);
+                currentController = null;
+                return;
+            }
+
+            try {
+                const json = JSON.parse(raw);
+                full += json.token || "";
+                textDiv.innerHTML = formatMessage(full);
+                autoScroll();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    }
+    setStatus(false);
+}
+
+/* --- agent autonome --- */
+async function sendAgent() {
+    if (currentController) currentController.abort();
+    currentController = new AbortController();
+
+    const input = document.getElementById("input");
+    const message = input.value;
+    if (!message || !currentThreadId) return;
+    input.value = "";
+
+    addRow("user", message);
+    const { toggle, workLog, answerDiv } = addAgentRow();
+    let lineCount = 0;
+    let answer = "";
+
+    setStatus(true, "agent");
+
+    let res;
+    try {
+        res = await fetch(`${API}/agent/stream`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ thread_id: currentThreadId, message }),
+            signal: currentController.signal
+        });
+    } catch (err) {
+        appendWorkLine(workLog, "Impossible de joindre le backend.", true);
+        collapseAgentWork(toggle, workLog, 1);
+        setStatus(false);
+        return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+        const { value, done } = await reader.read();
+
+        if (currentController?.signal.aborted) {
+            try { await reader.cancel(); } catch {}
+            break;
+        }
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            const raw = line.replace("data: ", "").trim();
+
+            if (raw === "[DONE]") {
+                collapseAgentWork(toggle, workLog, lineCount);
+                setStatus(false);
+                await loadThreads();
+                currentController = null;
+                currentAgentRunId = null;
+                return;
+            }
+
+            try {
+                const evt = JSON.parse(raw);
+
+                if (evt.kind === "run_id") {
+                    currentAgentRunId = evt.run_id;
+                } else if (evt.kind === "work") {
+                    lineCount++;
+                    appendWorkLine(workLog, evt.line, false);
+                } else if (evt.kind === "error") {
+                    lineCount++;
+                    appendWorkLine(workLog, evt.line, true);
+                } else if (evt.kind === "answer") {
+                    answer += evt.text;
+                    answerDiv.innerHTML = formatMessage(answer);
+                }
+
+                autoScroll();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    }
+
+    collapseAgentWork(toggle, workLog, lineCount);
+    setStatus(false);
+}
+
+function autoScroll() {
+    const chat = document.getElementById("chat");
+    chat.scrollTop = chat.scrollHeight;
+}
+
+/* =========================================================
+   NEW THREAD / GROUP
+   ========================================================= */
+async function newThread(type = "chat") {
+    const res = await fetch(`${API}/thread/new`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ type })
+    });
+    const data = await res.json();
+
+    await loadThreads();
+    await switchThread(data.thread_id);
+}
+
+function createGroup() {
+    const btn = document.getElementById("newGroupBtn");
+
+    const input = document.createElement("input");
+    input.className = "new-group-input";
+    input.placeholder = "Nom du groupe…";
+    btn.replaceWith(input);
+    input.focus();
+
+    let done = false;
+    const finish = (commit) => {
+        if (done) return;
+        done = true;
+
+        const name = input.value.trim();
+        input.replaceWith(btn);
+
+        if (commit && name && !customGroups.includes(name)) {
+            customGroups.push(name);
+            renderSidebar();
+        }
+    };
+
+    input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") finish(true);
+        else if (e.key === "Escape") finish(false);
+    });
+    input.addEventListener("blur", () => finish(true));
+}
+
+/* INIT */
+window.onload = loadThreads;
+</script>
+
+</body>
+</html>
