@@ -415,6 +415,8 @@ Téléchargement :
 
 https://huggingface.co/Qwen/Qwen3-8B-GGUF/blob/main/Qwen3-8B-Q4_K_M.gguf
 
+Chemin conseillé:
+/models/Qwen3_8b/
 ---
 
 ## coder : Qwen2.5 Coder 7B
@@ -431,6 +433,8 @@ Téléchargement :
 
 https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/tree/main
 
+Chemin conseillé:
+/models/Qwen_Code_Q4
 ---
 
 ## reasoning : Qwen2.5 Instruct 7B
@@ -447,6 +451,8 @@ Téléchargement :
 
 https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/blob/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf
 
+Chemin conseillé:
+/models/Qwen_Instruct_Q4
 ---
 
 ## docs : Mistral 7B Instruct
@@ -463,6 +469,8 @@ Téléchargement :
 
 https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/blob/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf
 
+Chemin conseillé:
+/models/Mistral_Q4
 ---
 
 # 📄 Les Modelfiles
