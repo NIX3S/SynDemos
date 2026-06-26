@@ -149,6 +149,50 @@ def retrieve_relevant(thread_id, query, top_k=4, exclude_last_n=8):
     return [entry for entry, score in scored[:top_k] if score > 0.3]
 
 
+def _extract_touched_files(agent_log):
+    """Liste (dans l'ordre, sans doublon) des chemins de fichiers que
+    l'agent a créés/modifiés/lus pendant un run, d'après les events
+    `tool_result`/`checkpoint` stockés dans agent_log. C'est l'info clé
+    qui manquait pour qu'un tour suivant sache QUOI modifier."""
+    paths = []
+    for evt in agent_log or []:
+        print(type(evt), evt)
+        data = evt.get("data", {}) or {}
+        data_dict = data if isinstance(data, dict) else {}
+        p = data_dict.get("path") or data_dict.get("file")
+        if p and p not in paths:
+            paths.append(p)
+    return paths
+
+
+def message_text(m):
+    """Texte d'un message tel qu'envoyé au LLM / à l'agent : le contenu
+    tapé par l'utilisateur + le contenu des fichiers joints (s'il y en
+    a) +, pour une réponse d'agent, les fichiers qu'il a réellement
+    touchés (sinon cette info reste enfouie dans agent_log et un tour
+    suivant ne peut pas savoir quel fichier modifier). Le `content`
+    stocké en base reste lui juste le texte affiché dans l'UI — la
+    fusion ne se fait qu'au moment de construire le contexte."""
+    text = m.get("content") or ""
+    attachments = m.get("attachments") or []
+    agent_log = m.get("agent_log") or []
+
+    if attachments:
+        blocks = "\n\n".join(
+            f"[Fichier joint: {a.get('filename', 'fichier')}]\n{a.get('content', '')}"
+            for a in attachments
+        )
+        text = f"{text}\n\n{blocks}" if text else blocks
+
+    if agent_log:
+        files = _extract_touched_files(agent_log)
+        if files:
+            note = "(Fichiers créés/modifiés lors de cette étape : " + ", ".join(files) + ")"
+            text = f"{text}\n{note}" if text else note
+
+    return text
+
+
 def build_context(thread, new_user_message, max_recent=8, max_retrieved=4):
     """Construit la liste de messages [{role, content}, ...] à envoyer au
     LLM : N derniers messages + rappel RAG des messages anciens pertinents.
@@ -159,7 +203,7 @@ def build_context(thread, new_user_message, max_recent=8, max_retrieved=4):
 
     if len(messages) <= max_recent:
         return [
-            {"role": m["role"], "content": m["content"]} for m in messages
+            {"role": m["role"], "content": message_text(m)} for m in messages
         ]
 
     recent = messages[-max_recent:]
@@ -184,23 +228,55 @@ def build_context(thread, new_user_message, max_recent=8, max_retrieved=4):
             ),
         })
 
-    context += [{"role": m["role"], "content": m["content"]} for m in recent]
+    context += [{"role": m["role"], "content": message_text(m)} for m in recent]
     return context
 
 
 def build_agent_prompt(thread, new_user_message, max_recent=6, max_retrieved=4):
-    """Variante texte unique de build_context, pour l'agent autonome dont
-    l'API `/ask` ne prend qu'un seul `prompt` (pas une liste de messages).
-    On reformate le contexte sous forme de mini-transcript lisible."""
+    """Prompt texte unique pour l'agent autonome (son `/ask` ne prend
+    qu'un `prompt`, pas une liste de messages structurée).
+
+    Point important : on sépare explicitement "ce qui a déjà été fait"
+    de "la nouvelle demande". Sans cette séparation, l'agent recevait
+    tout l'historique à plat et traitait la conversation entière comme
+    une seule tâche au lieu de comprendre qu'il doit CONTINUER/MODIFIER
+    ce qu'il a déjà produit (ex: "jusqu'à 100" après "jusqu'à 20" sur le
+    même fichier). On lui dit aussi explicitement de vérifier l'existant
+    (list_dir/read_file) plutôt que de repartir de zéro."""
     context_messages = build_context(thread, new_user_message, max_recent, max_retrieved)
 
+    if not context_messages:
+        return new_user_message
+
+    # Le dernier message est celui qu'on vient d'ajouter au thread juste
+    # avant cet appel (cf. /agent/stream) : c'est LA demande actuelle.
+    current = context_messages[-1]["content"]
+    history = context_messages[:-1]
+
+    if not history:
+        # Premier message du thread : pas d'historique, comportement
+        # identique à un appel simple (cf. exemples du README de l'agent).
+        return current
+
     lines = []
-    for m in context_messages:
+    for m in history:
         if m["role"] == "system":
-            lines.append(f"[Contexte de la conversation]\n{m['content']}")
+            lines.append(f"[Contexte]\n{m['content']}")
         elif m["role"] == "user":
             lines.append(f"Utilisateur: {m['content']}")
         else:
             lines.append(f"Assistant: {m['content']}")
+    history_block = "\n\n".join(lines)
 
-    return "\n\n".join(lines)
+    return (
+        "Voici l'historique de cette conversation jusqu'ici. Si la nouvelle "
+        "demande ci-dessous fait référence à un travail déjà effectué (un "
+        "fichier déjà créé ou modifié, par exemple), modifie ce qui existe "
+        "déjà dans le workspace au lieu de repartir de zéro — vérifie "
+        "l'existant avec list_dir/read_file si besoin avant d'écrire.\n\n"
+        "--- Historique ---\n"
+        f"{history_block}\n"
+        "--- Fin de l'historique ---\n\n"
+        "Nouvelle demande de l'utilisateur :\n"
+        f"{current}"
+    )

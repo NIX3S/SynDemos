@@ -1,16 +1,17 @@
 import json
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 from backend.chat import add_message, maybe_set_title, save_thread, load_thread
 from backend.storage import create_thread, list_threads, DATA_DIR
 from backend.models import ask_model_stream, ask_model
 from backend.agent_client import ask_agent_stream, summarize_event, AGENT_URL
 from backend import rag
+from backend import files as file_extract
 
 app = FastAPI()
 
@@ -27,10 +28,16 @@ app.add_middleware(
 # MODELS
 # =========================
 
+class Attachment(BaseModel):
+    filename: str
+    content: str
+
+
 class ChatRequest(BaseModel):
     thread_id: str
     message: str
     model: str
+    attachments: Optional[List[Attachment]] = None
 
 
 class RenameRequest(BaseModel):
@@ -56,10 +63,29 @@ class AgentChatRequest(BaseModel):
     thread_id: str
     message: str
     model: Optional[str] = None
+    attachments: Optional[List[Attachment]] = None
 
 
 class AgentStopRequest(BaseModel):
     force: bool = False
+
+
+# =========================
+# FICHIERS JOINTS
+# =========================
+
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """Reçoit un fichier (txt/py/md/pdf/docx/...), en extrait le texte et
+    le renvoie au client. Le texte est attaché au message suivant côté
+    UI (cf. /chat/stream et /agent/stream) — rien n'est persisté ici."""
+    raw = await file.read()
+    text, error = file_extract.extract_text(file.filename, raw)
+
+    if error:
+        return {"filename": file.filename, "error": error}
+
+    return {"filename": file.filename, "content": text}
 
 
 # =========================
@@ -134,11 +160,14 @@ def chat_stream(req: ChatRequest, request: Request):
 
     thread = load_thread(req.thread_id)
 
-    add_message(thread, "user", req.message, req.model)
+    attachments = [a.dict() for a in req.attachments] if req.attachments else None
+    add_message(thread, "user", req.message, req.model, attachments=attachments)
     maybe_set_title(thread, req.message)
 
     # Contexte = N derniers messages + rappel RAG des anciens messages
     # pertinents, plutôt que tout l'historique brut (cf. backend/rag.py).
+    # message_text() fusionne automatiquement le contenu des pièces
+    # jointes dans ce qui est envoyé au modèle.
     messages = rag.build_context(thread, req.message)
 
     def stream():
@@ -160,7 +189,8 @@ def chat_stream(req: ChatRequest, request: Request):
 def chat_api(req: ChatRequest):
     from backend.chat import chat
 
-    response, thread = chat(req.thread_id, req.message, req.model)
+    attachments = [a.dict() for a in req.attachments] if req.attachments else None
+    response, thread = chat(req.thread_id, req.message, req.model, attachments=attachments)
     return {
         "response": response,
         "thread": thread,
@@ -245,16 +275,17 @@ def _run_agent_sync(thread, user_message):
         for evt in ask_agent_stream(prompt):
             etype = evt.get("type")
             data = evt.get("data", {}) or {}
+            data_dict = data if isinstance(data, dict) else {}
 
             if etype == "start":
-                run_id = data.get("run_id")
+                run_id = data_dict.get("run_id")
             elif etype == "content_delta":
-                answer += data.get("text", "")
+                answer += data_dict.get("text", "")
             elif etype == "final":
                 if not answer:
-                    answer = data.get("content") or data.get("response") or data.get("result") or ""
+                    answer = data_dict.get("content") or data_dict.get("response") or data_dict.get("result") or ""
             else:
-                work_log.append({"type": etype, "data": data, "line": summarize_event(evt)})
+                work_log.append({"type": etype, "data": data_dict, "line": summarize_event(evt)})
     except Exception as e:
         work_log.append({"type": "error", "line": f"⚠️ Agent inaccessible: {e}"})
         if not answer:
@@ -286,7 +317,8 @@ def agent_stream(req: AgentChatRequest):
     """
     thread = load_thread(req.thread_id)
 
-    add_message(thread, "user", req.message, "agent")
+    attachments = [a.dict() for a in req.attachments] if req.attachments else None
+    add_message(thread, "user", req.message, "agent", attachments=attachments)
     maybe_set_title(thread, req.message)
 
     prompt = rag.build_agent_prompt(thread, req.message)

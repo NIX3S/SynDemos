@@ -41,6 +41,26 @@ def root():
     return {"status": "ok", "memory_turns": len(memory)}
 
 
+@router.get("/tools")
+def list_tools():
+    """
+    Diagnostic : liste les outils réellement enregistrés et exposés au
+    LLM à cet instant (function-calling schemas). Utile pour vérifier
+    sans ambiguïté qu'un outil attendu (ex: web_search) est bien chargé,
+    plutôt que de le découvrir au milieu d'un run.
+    """
+    from tools.registry import all_tool_schemas
+
+    schemas = all_tool_schemas()
+    return {
+        "count": len(schemas),
+        "tools": [
+            {"name": s["function"]["name"], "description": s["function"]["description"]}
+            for s in schemas
+        ],
+    }
+
+
 @router.post("/ask")
 async def ask(req: AskRequest):
     return StreamingResponse(

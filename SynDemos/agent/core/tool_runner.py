@@ -29,6 +29,49 @@ from tools.sandbox import normalize_path, PathSecurityError
 logger = logging.getLogger("agent.core.tool_runner")
 
 
+def _normalize_arguments(raw_args: Any, tool_name: str) -> dict[str, Any]:
+    """
+    Normalise les arguments d'un tool_call vers un dict, quelle que soit
+    la forme renvoyée par le modèle. Observé en pratique avec Ollama
+    (dépend du modèle, parfois même au sein d'une même session) :
+
+    - dict déjà prêt à l'emploi (cas attendu/idéal) -> renvoyé tel quel
+    - string JSON sérialisée (ex: '{"path": "a.py", "content": "..."}')
+      -> parsée
+    - liste (le modèle a halluciné une autre structure, ou un agrégat
+      malformé de plusieurs appels) -> aucune façon fiable de la
+      réinterpréter en arguments nommés ; on log et renvoie un dict
+      vide plutôt que de planter toute la requête sur un crash non
+      intercepté (`'list' object has no attribute 'get'`).
+    - tout autre type inattendu -> même traitement défensif.
+    """
+    if isinstance(raw_args, dict):
+        return raw_args
+
+    if isinstance(raw_args, str):
+        try:
+            parsed = json.loads(raw_args)
+        except json.JSONDecodeError:
+            logger.error(
+                "Arguments du tool_call '%s' sont une string non-JSON, impossible de les parser: %r",
+                tool_name, raw_args[:200],
+            )
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+        logger.error(
+            "Arguments du tool_call '%s' sont une string JSON valide mais ne décodent pas vers un objet (type reçu: %s)",
+            tool_name, type(parsed).__name__,
+        )
+        return {}
+
+    logger.error(
+        "Arguments du tool_call '%s' ont un type inattendu (%s), attendu dict ou string JSON. Valeur: %r",
+        tool_name, type(raw_args).__name__, raw_args,
+    )
+    return {}
+
+
 def call_tool_with_retry(name: str, args: dict[str, Any], run_id: Optional[str] = None) -> dict[str, Any]:
     fn = get_tool(name)
     if fn is None:
@@ -48,9 +91,15 @@ def call_tool_with_retry(name: str, args: dict[str, Any], run_id: Optional[str] 
     for attempt in range(1, retries + 1):
         try:
             return fn(**call_args)
+        except TypeError as e:
+            # Typiquement : args mal formés (clé inattendue, type incompatible
+            # avec la signature de l'outil) plutôt qu'une vraie erreur réseau/
+            # fichier — on le rapporte distinctement pour aider au diagnostic.
+            last_error = f"arguments invalides pour l'outil '{name}': {e}"
+            logger.warning("TOOL RETRY (args invalides) : %s — %s", name, e)
         except Exception as e:  # un outil ne doit jamais faire planter le run
             last_error = str(e)
-            logger.warning("Retry outil '%s' (tentative %d/%d): %s", name, attempt, retries, e)
+            logger.warning("TOOL RETRY : %s (tentative %d/%d): %s", name, attempt, retries, e)
 
     return {"ok": False, "error": last_error}
 
@@ -112,7 +161,7 @@ def execute_tool_calls(
 
     for tc in tool_calls:
         name = tc["function"]["name"]
-        args = tc["function"]["arguments"]
+        args = _normalize_arguments(tc["function"].get("arguments"), name)
 
         result = call_tool_with_retry(name, args, run_id=ctx.run_id)
 

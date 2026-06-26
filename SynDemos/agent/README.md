@@ -162,6 +162,60 @@ déploiement. Pour des PDF scannés sans couche texte, voir le skill
 `pdf-reading` (OCR, rasterisation) si une extraction plus poussée est
 nécessaire — hors scope de cet outil volontairement simple.
 
+## Recherche web
+
+Deux nouveaux outils, sans API tierce payante ni clé à configurer —
+juste une requête HTTP directe + parsing HTML (`requests` + `bs4`,
+déjà dans `requirements.txt`) :
+
+- `web_search(query, max_results)` : interroge DuckDuckGo HTML
+  (`html.duckduckgo.com`, pas besoin de JavaScript contrairement à
+  google.com) et retourne pour chaque résultat un titre, un extrait
+  (snippet) et une URL.
+- `web_fetch(url)` : récupère et nettoie le contenu texte complet d'une
+  page précise (retire nav/script/style/footer), typiquement une URL
+  jugée prometteuse parmi les résultats de `web_search`. Contenu
+  tronqué à 8000 caractères, avec un garde-fou anti-SSRF basique
+  (refuse `file://`, IPs locales/privées, endpoint de métadonnées cloud).
+
+**Pourquoi DuckDuckGo plutôt que Google directement** : Google rend ses
+résultats de recherche via JavaScript côté client, donc une requête HTTP
+simple sans navigateur ne récupère qu'une page quasi-vide. DuckDuckGo a
+une version HTML statique pensée pour ce genre d'usage, sans blocage
+agressif pour un usage raisonnable.
+
+**Le LLM décide lui-même de relancer une recherche** : le snippet de
+chaque résultat est la donnée clé pour ça — le prompt système de l'agent
+(`core/planner.py::AGENT_SYSTEM_PROMPT`) lui demande explicitement de
+juger la pertinence des extraits et de reformuler la requête si les
+résultats sont vagues ou hors sujet, plutôt que de se contenter du
+premier résultat faible. Concrètement : une recherche "tarte citron" qui
+ne renvoie que des généralités peut être suivie d'une seconde recherche
+"tarte citron meringuée" dans le même run — rien de spécial à faire côté
+moteur, la FSM (`core/engine.py`) laisse déjà le LLM enchaîner autant
+d'appels d'outils qu'il veut dans la limite de `AGENT_MAX_STEPS`, exactement
+comme pour une séquence d'écriture de plusieurs fichiers.
+
+```bash
+curl -N -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Trouve-moi une recette de tarte au citron meringuée"}'
+# -> web_search("tarte citron") jugé vague par le LLM
+# -> web_search("tarte citron meringuée") relancé automatiquement
+# -> réponse finale basée sur le second résultat
+```
+
+**Vérifier que tous les outils sont bien chargés** : `GET /tools` liste
+les outils réellement enregistrés et exposés au LLM à cet instant. Utile
+pour confirmer sans ambiguïté qu'un outil attendu (ex: `web_search`) est
+bien là, plutôt que de le découvrir au milieu d'un run. La même liste
+est aussi loguée au démarrage du serveur (`agent.startup`).
+
+```bash
+curl http://localhost:8000/tools
+# {"count": 9, "tools": [{"name": "write_file", ...}, ..., {"name": "web_search", ...}]}
+```
+
 ## Routage automatique de modèle selon le type de tâche
 
 Le planner classe désormais chaque demande dans une catégorie
@@ -249,6 +303,7 @@ pour la débloquer. `/debug/{run_id}` permet de repérer un run dont
 | 11 | `api.py` | `/debug/{run_id}` ne cherche que dans `RUNS` → un run juste archivé devient introuvable | `RunStore.get()` cherche dans actifs **et** archivés |
 | 12 | `executor.py` | `print("step0")`, `print("step 1")`... partout (debug oublié en prod) | Remplacés par `logging` standard, configurable, silencieux par défaut |
 | 13 | `core/engine.py` (introduit dans une itération précédente de cette refonte) | La transition EXEC→VERIFY se déclenchait dès le **premier** fichier `.py` créé, même si le LLM avait encore d'autres tool_calls prévus dans son tour → une séquence multi-fichiers liés (ex: `utils.py` puis `main.py` qui l'importe) était interrompue après le premier fichier, le second n'était jamais créé | La transition n'a lieu que quand le LLM n'appelle plus aucun outil (tour terminé), pas après chaque tool_call individuel — testé avec un scénario à 2 fichiers interdépendants |
+| 14 | `core/tool_runner.py` (introduit dans une itération précédente de cette refonte) | Ollama renvoie parfois `tool_call.function.arguments` sous une forme inattendue (liste, string JSON au lieu d'un dict déjà parsé) selon le modèle — le code appelait directement `.get(...)`/`**args` sans valider, ce qui faisait planter **tout le run** avec `'list' object has no attribute 'get'`, en pleine utilisation réelle avec Ollama | `_normalize_arguments()` valide et convertit la forme reçue (dict → tel quel, string JSON → parsée, tout le reste → dict vide + log d'erreur) avant tout usage ; un outil avec des arguments malformés renvoie maintenant une erreur structurée normale, sans jamais faire tomber la requête entière |
 
 ## Fonctionnalités ajoutées (style Claude Code)
 
@@ -286,6 +341,10 @@ pour la débloquer. `/debug/{run_id}` permet de repérer un run dont
   via `os.killpg`, pas juste le shell parent).
 - **Lecture de PDF** : `inspect_pdf` / `read_pdf` pour que l'agent puisse
   lire des documents PDF du workspace (specs, rapports...).
+- **Recherche web** : `web_search` / `web_fetch` via DuckDuckGo HTML +
+  BeautifulSoup, sans API tierce ni clé à configurer. Le LLM juge la
+  pertinence des résultats via leurs extraits et relance une recherche
+  reformulée si besoin, dans le même run.
 - **Routage automatique de modèle** : le planner classe la tâche
   (code/redaction/synthese/reflexion) et l'exécution utilise
   automatiquement le modèle Ollama configuré pour cette catégorie.
@@ -298,6 +357,12 @@ pour la débloquer. `/debug/{run_id}` permet de repérer un run dont
 - Le mode JSON d'Ollama (`format: "json"`) nécessite une version
   d'Ollama relativement récente — vérifie `ollama --version` si le
   planner échoue systématiquement au parsing.
+- `web_search`/`web_fetch` (`tools/web_tools.py`) font du scraping HTML
+  direct, pas un appel d'API stable : si DuckDuckGo change la structure
+  de sa page HTML (classes CSS `.result`, `.result__title`,
+  `.result__snippet`), le parsing peut casser silencieusement (retourner
+  `count: 0` alors que des résultats existent). Si ça arrive, c'est ce
+  fichier qu'il faut ajuster — pas un problème réseau.
 - `AGENT_ALLOWED_MODELS` doit être tenu à jour avec les modèles réellement
   installés (`ollama list`) — mais les modèles du mapping par catégorie
   (`AGENT_MODEL_CODE`, etc.) y sont ajoutés automatiquement, donc pas

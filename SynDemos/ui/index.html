@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Relay — Local AI</title>
-
+<title>SynDemos</title>
+<link rel="icon" type="image/x-icon" href="/images/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -364,6 +364,7 @@ input, select {
     padding: 0 20px;
     border-bottom: 1px solid var(--border);
     background: var(--bg);
+    position: relative;
 }
 
 #threadHeaderTitle {
@@ -379,6 +380,80 @@ input, select {
 #model {
     font-size: 12px;
     padding: 6px 10px;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+#filesBtn {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 7px;
+}
+#filesBtn:hover { color: var(--text); border-color: var(--accent); }
+#filesBtn.active { color: var(--accent); border-color: var(--accent); }
+
+.files-panel {
+    position: absolute;
+    top: 54px;
+    right: 20px;
+    z-index: 30;
+    width: 280px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+    padding: 6px;
+}
+
+.files-panel-title {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 8px 8px 4px;
+}
+
+.files-panel-empty {
+    padding: 10px 8px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+}
+
+.files-panel-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.files-panel-item:hover { background: var(--surface-2); }
+.files-panel-item .fname {
+    font-size: 12.5px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.files-panel-item .fmeta {
+    font-size: 10.5px;
+    font-family: var(--font-mono);
+    color: var(--text-dim);
 }
 
 #chat {
@@ -446,9 +521,59 @@ input, select {
 }
 
 .row-text {
-    white-space: pre-wrap;
     line-height: 1.6;
     word-break: break-word;
+}
+.row-text p { margin: 0 0 10px; }
+.row-text p:last-child { margin-bottom: 0; }
+
+.row-text h1, .row-text h2, .row-text h3,
+.row-text h4, .row-text h5, .row-text h6 {
+    margin: 16px 0 8px;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.row-text h1:first-child, .row-text h2:first-child, .row-text h3:first-child { margin-top: 0; }
+.row-text h1 { font-size: 1.4em; }
+.row-text h2 { font-size: 1.25em; }
+.row-text h3 { font-size: 1.1em; }
+.row-text h4, .row-text h5, .row-text h6 { font-size: 1em; color: var(--text-dim); }
+
+.row-text ul, .row-text ol { margin: 0 0 10px; padding-left: 22px; }
+.row-text li { margin-bottom: 4px; }
+
+.row-text blockquote {
+    margin: 0 0 10px;
+    padding: 2px 14px;
+    border-left: 2px solid var(--border);
+    color: var(--text-dim);
+}
+.row-text blockquote p { margin-bottom: 6px; }
+.row-text blockquote p:last-child { margin-bottom: 0; }
+
+.row-text hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+.row-text code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+.row-text a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
+.row-text a:hover { border-bottom-color: var(--accent); }
+
+.row-text strong { font-weight: 600; }
+
+.code-lang {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-dim);
+    margin-right: auto;
+    align-self: center;
+    padding-left: 4px;
 }
 
 .row-actions {
@@ -494,7 +619,8 @@ input, select {
 }
 .code-block .code-bar {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
     padding: 4px 6px;
     border-bottom: 1px solid var(--border);
 }
@@ -579,6 +705,86 @@ input, select {
 }
 #inputRow:focus-within { border-color: var(--accent); }
 
+#attachBtn {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    color: var(--text-dim);
+    font-size: 15px;
+}
+#attachBtn:hover { background: var(--surface-2); color: var(--text); }
+
+.attach-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.attach-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 6px 5px 10px;
+    font-size: 12px;
+    color: var(--text-dim);
+    max-width: 240px;
+}
+.attach-chip.error { border-color: var(--danger); color: var(--danger); }
+.attach-chip .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.attach-chip .remove {
+    flex-shrink: 0;
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+}
+.attach-chip .remove:hover { color: var(--danger); }
+
+.msg-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+.msg-attachment {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    cursor: pointer;
+}
+.msg-attachment:hover { color: var(--text); border-color: var(--accent); }
+
+.attachment-preview {
+    display: none;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-top: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
 #input {
     flex: 1;
     border: none;
@@ -639,7 +845,7 @@ input, select {
     <div id="topbar">
         <div class="topbar-left" style="display:flex; align-items:center; gap:6px;">
             <button id="menuToggle" aria-label="Ouvrir le menu" onclick="toggleSidebar()">☰</button>
-            <div class="brand"><span class="brand-dot"></span>Relay</div>
+            <div class="brand"><span class="brand-dot"></span>SynDemos</div>
         </div>
         <div class="topbar-right">
             <button id="themeToggle" role="switch" aria-checked="false" aria-label="Basculer le thème" onclick="toggleTheme()">
@@ -665,18 +871,29 @@ input, select {
                     <div id="threadHeaderTitle">—</div>
                     <span id="threadTypeBadge" class="row-tag" style="display:none;">Agent</span>
                 </div>
-                <select id="model">
-                    <option value="coder">Coder</option>
-                    <option value="docs">Docs</option>
-                    <option value="reasoning">Reasoning</option>
-                </select>
+                <div class="header-right">
+                    <button id="filesBtn" title="Fichiers envoyés dans cette conversation" onclick="toggleFilesPanel()">
+                        📎 <span id="filesCount">0</span>
+                    </button>
+                    <select id="model">
+                        <option value="coder">Coder</option>
+                        <option value="docs">Docs</option>
+                        <option value="reasoning">Reasoning</option>
+                    </select>
+                </div>
+                <div id="filesPanel" class="files-panel" style="display:none;"></div>
             </div>
 
             <div id="chat"></div>
 
             <div id="inputBar">
                 <div id="statusLine"><span class="dot"></span><span id="statusText">Génération…</span></div>
+                <div id="attachBar" class="attach-bar" style="display:none;"></div>
                 <div id="inputRow">
+                    <input type="file" id="fileInput" multiple style="display:none"
+                           accept=".txt,.py,.js,.ts,.jsx,.tsx,.md,.json,.csv,.html,.css,.yaml,.yml,.xml,.sh,.sql,.java,.c,.cpp,.h,.go,.rs,.rb,.php,.pdf,.docx,.log"
+                           onchange="handleFileSelect(event)">
+                    <button id="attachBtn" title="Joindre un fichier" onclick="document.getElementById('fileInput').click()">📎</button>
                     <input id="input" placeholder="Écrire un message…" autocomplete="off" />
                     <button id="stopBtn" onclick="stopGeneration()">Stop</button>
                     <button id="sendBtn" onclick="send()">Envoyer</button>
@@ -697,6 +914,8 @@ let currentAgentRunId = null;
 let threads = [];
 let customGroups = [];
 let groupState = {};
+let pendingAttachments = []; // [{filename, content, uploading, error}]
+let currentThreadFiles = []; // [{filename, content, messageIndex}] du thread courant
 
 /* =========================================================
    THEME
@@ -750,15 +969,131 @@ function escapeHtml(text) {
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function formatMessage(text) {
-    return text.replace(/```([\s\S]*?)```/g, (_, code) => {
-        const safeCode = escapeHtml(code.trim());
-        return `
-        <div class="code-block">
-            <div class="code-bar"><button onclick="copyCode(this)">Copier</button></div>
-            <pre><code>${safeCode}</code></pre>
-        </div>`;
+function renderInline(escapedText) {
+    let t = escapedText;
+    // code inline
+    t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // gras + italique
+    t = t.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+    t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    t = t.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<em>$1</em>');
+    t = t.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    t = t.replace(/(?<!_)_([^_\n]+)_(?!_)/g, '<em>$1</em>');
+    // liens [texte](url)
+    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    return t;
+}
+
+function renderCodeBlock(lang, code) {
+    const safeCode = escapeHtml(code.replace(/\n$/, ""));
+    const langLabel = lang ? `<span class="code-lang">${escapeHtml(lang)}</span>` : "<span></span>";
+    return `
+    <div class="code-block">
+        <div class="code-bar">${langLabel}<button onclick="copyCode(this)">Copier</button></div>
+        <pre><code>${safeCode}</code></pre>
+    </div>`;
+}
+
+function formatMessage(raw) {
+    if (!raw) return "";
+
+    // 1) Extraire les blocs de code en premier pour ne pas les laisser
+    // interférer avec le parsing markdown du reste du texte.
+    const codeBlocks = [];
+    const withPlaceholders = raw.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push({ lang, code });
+        return `\u0000CODEBLOCK${idx}\u0000`;
     });
+
+    const lines = withPlaceholders.split("\n");
+    const html = [];
+    let i = 0;
+    let listType = null; // "ul" | "ol" | null
+    let inQuote = false;
+
+    const closeList = () => { if (listType) { html.push(listType === "ul" ? "</ul>" : "</ol>"); listType = null; } };
+    const closeQuote = () => { if (inQuote) { html.push("</blockquote>"); inQuote = false; } };
+
+    const isBlockStart = (line) =>
+        /^#{1,6}\s/.test(line) ||
+        /^(\s*)[-*+]\s+/.test(line) ||
+        /^(\s*)\d+\.\s+/.test(line) ||
+        /^>\s?/.test(line) ||
+        /^\u0000CODEBLOCK\d+\u0000$/.test(line) ||
+        line.trim() === "";
+
+    while (i < lines.length) {
+        const line = lines[i];
+
+        const codeMatch = line.match(/^\u0000CODEBLOCK(\d+)\u0000$/);
+        if (codeMatch) {
+            closeList(); closeQuote();
+            const { lang, code } = codeBlocks[Number(codeMatch[1])];
+            html.push(renderCodeBlock(lang, code));
+            i++; continue;
+        }
+
+        if (line.trim() === "") {
+            closeList(); closeQuote();
+            i++; continue;
+        }
+
+        const headerMatch = line.match(/^(#{1,6})\s+(.*)$/);
+        if (headerMatch) {
+            closeList(); closeQuote();
+            const level = headerMatch[1].length;
+            html.push(`<h${level}>${renderInline(escapeHtml(headerMatch[2]))}</h${level}>`);
+            i++; continue;
+        }
+
+        if (/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+            closeList(); closeQuote();
+            html.push("<hr>");
+            i++; continue;
+        }
+
+        if (/^>\s?/.test(line)) {
+            closeList();
+            if (!inQuote) { html.push("<blockquote>"); inQuote = true; }
+            html.push(`<p>${renderInline(escapeHtml(line.replace(/^>\s?/, "")))}</p>`);
+            i++; continue;
+        }
+        closeQuote();
+
+        const ulMatch = line.match(/^\s*[-*+]\s+(.*)$/);
+        if (ulMatch) {
+            if (listType !== "ul") { closeList(); html.push("<ul>"); listType = "ul"; }
+            html.push(`<li>${renderInline(escapeHtml(ulMatch[1]))}</li>`);
+            i++; continue;
+        }
+
+        const olMatch = line.match(/^\s*\d+\.\s+(.*)$/);
+        if (olMatch) {
+            if (listType !== "ol") { closeList(); html.push("<ol>"); listType = "ol"; }
+            html.push(`<li>${renderInline(escapeHtml(olMatch[1]))}</li>`);
+            i++; continue;
+        }
+
+        closeList();
+
+        // paragraphe : on regroupe les lignes consécutives jusqu'au
+        // prochain élément de bloc, en gardant les retours à la ligne
+        // simples comme <br> (plus naturel pour du texte généré par un LLM
+        // qu'un "soft break" markdown strict qui les fusionnerait).
+        const para = [line];
+        let j = i + 1;
+        while (j < lines.length && !isBlockStart(lines[j])) {
+            para.push(lines[j]);
+            j++;
+        }
+        const paraHtml = para.map(l => renderInline(escapeHtml(l))).join("<br>");
+        html.push(`<p>${paraHtml}</p>`);
+        i = j;
+    }
+
+    closeList(); closeQuote();
+    return html.join("\n");
 }
 
 function copyCode(btn) {
@@ -766,6 +1101,73 @@ function copyCode(btn) {
     navigator.clipboard.writeText(code);
     btn.innerText = "Copié";
     setTimeout(() => { btn.innerText = "Copier"; }, 1500);
+}
+
+/* =========================================================
+   PIÈCES JOINTES
+   ========================================================= */
+function renderAttachBar() {
+    const bar = document.getElementById("attachBar");
+    bar.innerHTML = "";
+
+    if (!pendingAttachments.length) {
+        bar.style.display = "none";
+        return;
+    }
+    bar.style.display = "flex";
+
+    pendingAttachments.forEach((a, idx) => {
+        const chip = document.createElement("div");
+        chip.className = "attach-chip" + (a.error ? " error" : "");
+
+        const label = a.uploading ? `${a.filename} (envoi…)` : (a.error ? `${a.filename} — ${a.error}` : a.filename);
+        chip.innerHTML = `<span class="name">${escapeHtml(label)}</span><button class="remove" title="Retirer">×</button>`;
+
+        chip.querySelector(".remove").onclick = () => {
+            pendingAttachments.splice(idx, 1);
+            renderAttachBar();
+        };
+
+        bar.appendChild(chip);
+    });
+}
+
+async function handleFileSelect(e) {
+    const fileList = Array.from(e.target.files || []);
+    e.target.value = ""; // permet de re-sélectionner le même fichier ensuite
+
+    for (const file of fileList) {
+        const entry = { filename: file.name, content: "", uploading: true, error: null };
+        pendingAttachments.push(entry);
+        renderAttachBar();
+
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
+            const data = await res.json();
+
+            entry.uploading = false;
+            if (data.error) {
+                entry.error = data.error;
+            } else {
+                entry.content = data.content || "";
+            }
+        } catch (err) {
+            entry.uploading = false;
+            entry.error = "Échec de l'envoi";
+        }
+        renderAttachBar();
+    }
+}
+
+// Prend ce qui a été uploadé avec succès, vide la barre, et renvoie le
+// format attendu par le backend pour /chat/stream et /agent/stream.
+function consumeAttachments() {
+    const valid = pendingAttachments.filter(a => !a.error && !a.uploading && a.content);
+    pendingAttachments = [];
+    renderAttachBar();
+    return valid.map(a => ({ filename: a.filename, content: a.content }));
 }
 
 /* =========================================================
@@ -1028,6 +1430,7 @@ async function switchThread(id) {
     if (!id) return;
     currentThreadId = id;
     document.body.classList.remove("sidebar-open");
+    document.getElementById("filesPanel").style.display = "none";
 
     const res = await fetch(`${API}/thread/${id}`);
     const data = await res.json();
@@ -1040,9 +1443,85 @@ async function switchThread(id) {
     const group = data.group || "Default";
     groupState[group] = true;
 
-    renderChat(data.messages || []);
+    const messages = data.messages || [];
+    currentThreadFiles = computeThreadFiles(messages);
+    renderFilesButton();
+
+    renderChat(messages);
     renderSidebar();
 }
+
+/* =========================================================
+   FICHIERS DE LA CONVERSATION
+   ========================================================= */
+function computeThreadFiles(messages) {
+    const files = [];
+    messages.forEach((m, i) => {
+        (m.attachments || []).forEach(a => {
+            files.push({ filename: a.filename, content: a.content || "", messageIndex: i });
+        });
+    });
+    return files;
+}
+
+function renderFilesButton() {
+    const btn = document.getElementById("filesBtn");
+    document.getElementById("filesCount").innerText = currentThreadFiles.length;
+    btn.style.display = currentThreadFiles.length ? "flex" : "none";
+}
+
+function toggleFilesPanel() {
+    const panel = document.getElementById("filesPanel");
+    const btn = document.getElementById("filesBtn");
+
+    if (panel.style.display === "block") {
+        panel.style.display = "none";
+        btn.classList.remove("active");
+        return;
+    }
+
+    panel.innerHTML = `<div class="files-panel-title">Fichiers de cette conversation</div>`;
+
+    if (!currentThreadFiles.length) {
+        panel.innerHTML += `<div class="files-panel-empty">Aucun fichier joint pour l'instant.</div>`;
+    } else {
+        currentThreadFiles.forEach((f) => {
+            const item = document.createElement("div");
+            item.className = "files-panel-item";
+            item.innerHTML = `
+                <span class="fname">📎 ${escapeHtml(f.filename)}</span>
+                <span class="fmeta">${f.content.length.toLocaleString("fr-FR")} caractères</span>
+            `;
+            item.onclick = () => {
+                panel.style.display = "none";
+                btn.classList.remove("active");
+                scrollToMessage(f.messageIndex);
+            };
+            panel.appendChild(item);
+        });
+    }
+
+    panel.style.display = "block";
+    btn.classList.add("active");
+}
+
+function scrollToMessage(index) {
+    const row = document.querySelector(`#chat [data-index="${index}"]`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.style.transition = "outline 0.15s";
+    row.style.outline = "2px solid var(--accent)";
+    setTimeout(() => { row.style.outline = "none"; }, 1400);
+}
+
+document.addEventListener("click", (e) => {
+    const panel = document.getElementById("filesPanel");
+    const btn = document.getElementById("filesBtn");
+    if (panel.style.display === "block" && !panel.contains(e.target) && !btn.contains(e.target)) {
+        panel.style.display = "none";
+        btn.classList.remove("active");
+    }
+});
 
 /* =========================================================
    RENDER MESSAGES
@@ -1061,16 +1540,16 @@ function renderChat(messages) {
 
     messages.forEach((m, i) => {
         if (m.role === "assistant" && Array.isArray(m.agent_log)) {
-            renderAgentMessage(m);
+            renderAgentMessage(m, i);
             return;
         }
-        addRow(m.role, m.content, m.model, i);
+        addRow(m.role, m.content, m.model, i, m.attachments);
     });
 
     chat.scrollTop = chat.scrollHeight;
 }
 
-function addRow(role, text, model, index) {
+function addRow(role, text, model, index, attachments) {
     const chat = document.getElementById("chat");
     if (chat.querySelector(".empty-state")) chat.innerHTML = "";
 
@@ -1086,8 +1565,35 @@ function addRow(role, text, model, index) {
         </div>
     `;
 
+    const content = row.querySelector(".row-content");
+
+    if (attachments && attachments.length) {
+        const wrap = document.createElement("div");
+        wrap.className = "msg-attachments";
+
+        attachments.forEach(a => {
+            const chip = document.createElement("span");
+            chip.className = "msg-attachment";
+            chip.innerText = `📎 ${a.filename}`;
+
+            const preview = document.createElement("div");
+            preview.className = "attachment-preview";
+            preview.innerText = a.content || "";
+
+            chip.onclick = () => {
+                preview.style.display = preview.style.display === "block" ? "none" : "block";
+            };
+
+            wrap.appendChild(chip);
+            wrap.appendChild(preview);
+        });
+
+        content.appendChild(wrap);
+    }
+
     if (index !== undefined) {
-        const content = row.querySelector(".row-content");
+        row.dataset.index = index;
+
         const actions = document.createElement("div");
         actions.className = "row-actions";
 
@@ -1113,12 +1619,13 @@ function addRow(role, text, model, index) {
     return row;
 }
 
-function addAgentRow() {
+function addAgentRow(index) {
     const chat = document.getElementById("chat");
     if (chat.querySelector(".empty-state")) chat.innerHTML = "";
 
     const row = document.createElement("div");
     row.className = "row row-agent";
+    if (index !== undefined) row.dataset.index = index;
 
     row.innerHTML = `
         <div class="row-marker"><span class="marker-label">Agent</span></div>
@@ -1139,8 +1646,8 @@ function addAgentRow() {
     };
 }
 
-function renderAgentMessage(m) {
-    const { toggle, workLog, answerDiv } = addAgentRow();
+function renderAgentMessage(m, index) {
+    const { toggle, workLog, answerDiv } = addAgentRow(index);
     (m.agent_log || []).forEach(evt => appendWorkLine(workLog, evt.line, evt.type === "error"));
     answerDiv.innerHTML = formatMessage(m.content || "");
     collapseAgentWork(toggle, workLog, (m.agent_log || []).length);
@@ -1289,10 +1796,11 @@ async function sendChat() {
     const input = document.getElementById("input");
     const model = document.getElementById("model").value;
     const message = input.value;
-    if (!message || !currentThreadId) return;
+    const attachments = consumeAttachments();
+    if ((!message && attachments.length === 0) || !currentThreadId) return;
     input.value = "";
 
-    addRow("user", message);
+    addRow("user", message, null, undefined, attachments);
     const row = addRow("assistant", "", model);
     const textDiv = row.querySelector(".row-text");
     let full = "";
@@ -1302,7 +1810,7 @@ async function sendChat() {
     const res = await fetch(`${API}/chat/stream`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ thread_id: currentThreadId, message, model }),
+        body: JSON.stringify({ thread_id: currentThreadId, message, model, attachments }),
         signal: currentController.signal
     });
 
@@ -1351,10 +1859,11 @@ async function sendAgent() {
 
     const input = document.getElementById("input");
     const message = input.value;
-    if (!message || !currentThreadId) return;
+    const attachments = consumeAttachments();
+    if ((!message && attachments.length === 0) || !currentThreadId) return;
     input.value = "";
 
-    addRow("user", message);
+    addRow("user", message, null, undefined, attachments);
     const { toggle, workLog, answerDiv } = addAgentRow();
     let lineCount = 0;
     let answer = "";
@@ -1366,7 +1875,7 @@ async function sendAgent() {
         res = await fetch(`${API}/agent/stream`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ thread_id: currentThreadId, message }),
+            body: JSON.stringify({ thread_id: currentThreadId, message, attachments }),
             signal: currentController.signal
         });
     } catch (err) {
@@ -1397,6 +1906,7 @@ async function sendAgent() {
                 collapseAgentWork(toggle, workLog, lineCount);
                 setStatus(false);
                 await loadThreads();
+                await switchThread(currentThreadId);
                 currentController = null;
                 currentAgentRunId = null;
                 return;

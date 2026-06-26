@@ -43,7 +43,7 @@ def _env_bool(name: str, default: bool) -> bool:
 # Workspace : LE seul endroit où ce chemin est défini dans tout le projet.
 # ---------------------------------------------------------------------------
 WORKSPACE: Path = Path(
-    os.getenv("AGENT_WORKSPACE", "/workspace/workforce")
+    os.getenv("AGENT_WORKSPACE", "/mnt/d/dev/ai_os/workforce")
 ).resolve()
 
 LOG_DIR: Path = WORKSPACE / "logs" / "runs"
@@ -107,7 +107,7 @@ class LLMConfig:
         dict.fromkeys(
             _env_list(
                 "AGENT_ALLOWED_MODELS",
-                [MODEL_EXEC, MODEL_PLANNER, "qwen3:8b", "Coder", "Reasoning"],
+                [MODEL_EXEC, MODEL_PLANNER, "qwen3:8b", "qwen3:14b", "llama3.1:8b"],
             )
             + list(MODEL_BY_CATEGORY.values())
         )
@@ -198,6 +198,15 @@ EVENT_TYPES: set[str] = {
     "checkpoint",
     "undo",
 }
+
+
+# ---------------------------------------------------------------------------
+# Recherche web (tools/web_tools.py) — scraping HTML direct, pas d'API tierce
+# ---------------------------------------------------------------------------
+WEB_REQUEST_TIMEOUT: int = _env_int("AGENT_WEB_TIMEOUT", 15)
+WEB_MAX_RESULTS_DEFAULT: int = _env_int("AGENT_WEB_MAX_RESULTS", 5)
+WEB_MAX_RESULTS_HARD_CAP: int = _env_int("AGENT_WEB_MAX_RESULTS_CAP", 10)
+WEB_MAX_FETCH_CHARS: int = _env_int("AGENT_WEB_MAX_FETCH_CHARS", 8_000)
 
 
 # ---------------------------------------------------------------------------
