@@ -39,7 +39,7 @@ from pathlib import Path
 import requests
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
+EMBED_MODEL = os.getenv("EMBED_MODEL", "embeded")
 
 EMBED_DIR = Path("data/embeddings")
 EMBED_DIR.mkdir(parents=True, exist_ok=True)
@@ -63,7 +63,9 @@ def get_embedding(text):
         r.raise_for_status()
         embedding = r.json().get("embedding")
         return embedding or None
-    except Exception:
+    except Exception as e:
+        print('Rag embede exception : ')
+        print(e)
         return None
 
 

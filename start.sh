@@ -28,7 +28,7 @@ ollama list | grep -q "^qwen3:8b" || ollama create qwen3:8b -f /models/Qwen3_8b/
 ollama list | grep -q "^coder" || ollama create coder -f /models/Qwen_Code_Q4/Modelfile
 ollama list | grep -q "^docs" || ollama create docs -f /models/Mistral_Q4/Modelfile
 ollama list | grep -q "^reasoning" || ollama create reasoning -f /models/Qwen_Instruct_Q4/Modelfile
-
+ollama list | grep -q "^embeded" || ollama create embeded -f /models/Embed_BGE_m3/Modelfile
 echo "========================================"
 echo "Installed models"
 echo "========================================"

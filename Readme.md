@@ -381,6 +381,7 @@ models/
 ├── Qwen_Code_Q4/
 ├── Qwen_Instruct_Q4/
 └── Qwen3_8b/
+└── Embed_BGE_m3/
 ```
 
 Chaque dossier contient :
@@ -463,6 +464,21 @@ Téléchargement :
 
 https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/blob/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf
 
+---
+
+## embeded : BGE M3
+
+Utilisé principalement pour le system de RAG
+
+**Version recommandée**
+
+```
+Q4_K_M
+```
+
+Téléchargement :
+
+https://huggingface.co/gpustack/bge-m3-GGUF/tree/main
 ---
 
 # 📄 Les Modelfiles
@@ -1147,7 +1163,7 @@ Les fonctionnalités ci-dessous représentent les principales pistes d'améliora
 - [x] Base documentaire persistante
 - [ ] Support de nouveaux formats (Word, Excel...)
 - [x] Réindexation automatique
-- [ ] Recherche hybride (BM25 + embeddings)
+- [x] Recherche hybride (BM25 + embeddings)
 
 ---
 
